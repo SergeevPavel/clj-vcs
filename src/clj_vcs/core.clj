@@ -85,7 +85,7 @@
     (= av bv)                av
     (= av pv)                bv
     (= bv pv)                av
-    (every? map? (av bv pv)) (three-way-merge pv av bv)
+    (every? map? [av bv pv]) (three-way-merge pv av bv)
     :else (throw (Exception. "Merge conflict"))))
 
 (defn remove-nil-values
@@ -121,7 +121,45 @@
      :current target
      }))
 
+(defn diff-maps
+  [base derived]
+  (let [all-keys (concat (keys base) (keys derived))]
+    (reduce (fn [r k] (let [bv (base k) dv (derived k)]
+                        (cond (= bv dv)             r
+                              (every? map? [bv dv]) (assoc r k nil)
+                              :else                 (assoc r k dv)))) {} all-keys)))
+
+(defn apply-diff
+  [base difference]
+  (if (every? map? [base difference])
+    (merge-with apply-diff base difference)
+    difference))
+
+(defn get-snapshots-between
+  [index up-id dn-id]
+  (loop [id dn-id snapshots []]
+    (if (= up-id id)
+      (conj snapshots (get-in index [id 0]))
+      (recur (get-in index [id 1 0]) (conj snapshots (get-in index [id 0]))))))
+
+(defn snapshot-difference
+  [snapshots]
+  (map diff-maps snapshots (rest snapshots)))
+
+(defn create-rebased-snapshots
+  [index from-id to-id]
+  (let [pid (find-common-parent index from-id to-id)
+        snapshots (reverse (get-snapshots-between index pid from-id))
+        diffs (snapshot-difference snapshots)
+        base (get-in index [to-id 0])]
+    (rest (reductions (comp remove-nil-values apply-diff) base diffs))))
+
 (defn rebase
   "Reabase commits from current to target."
   [repo target]
-  nil)
+  (let [{i :index b :branches c :current} repo
+        current-id (b c)
+        target-id (b target)
+        snapshots (create-rebased-snapshots i current-id target-id)
+        new-repo (assoc-in repo [:branches c] target-id)]
+    (reduce commit new-repo snapshots)))
