@@ -55,12 +55,17 @@
 (defn branch
   "Create new branch."
   [repo branch-name]
-  nil)
+  (let [id (get-current-id repo)
+        {i :index b :branches c :current} repo]
+    {:index i
+     :branches (assoc b branch-name id)
+     :current c
+     }))
 
 (defn checkout
   "Switch current branch."
   [repo branch-name]
-  nil)
+  (assoc repo :current branch-name))
 
 (defn merge-branches
   "Merge current branch to target."
