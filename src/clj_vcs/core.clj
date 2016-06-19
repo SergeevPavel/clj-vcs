@@ -68,6 +68,7 @@
 
 ;; При мерже с веткой созданной из уже замерженой,
 ;; на данный момент, выбирается не самый поздний родительский коммит.
+; as far as I can see comment is outdated? right?
 (defn find-common-parent
   [index h1 h2]
   (loop [ids1 (reverse (get-ids-history index h1))
@@ -76,6 +77,24 @@
     (if (or (not= (first ids1) (first ids2)) (empty? ids1) (empty? ids2))
       prev
       (recur (rest ids1) (rest ids2) (first ids1)))))
+
+(comment
+  (find-common-parent {-1 [{} []]
+                       0 [{} [-1]]
+                       1 [{} [0]]
+                       2 [{} [1]]
+                       3 [{} [0]]
+                       }
+                      2 3)
+
+  (get-ids-history {-1 [{} []]
+                    0 [{} [-1]]
+                    1 [{} [0]]
+                    2 [{} [1]]
+                    3 [{} [0]]
+                    } 2)
+  
+  )
 
 (declare three-way-merge)
 
@@ -88,7 +107,7 @@
     (every? map? [av bv pv]) (three-way-merge pv av bv)
     :else (throw (Exception. "Merge conflict"))))
 
-(defn remove-nil-values
+(defn remove-nil-values ;WTF why do you need this?
   [m]
   (reduce (fn [r k] (cond
                       (map? (m k))  (assoc r k (remove-nil-values (m k)))
@@ -97,8 +116,11 @@
 
 (defn three-way-merge
   [p a b]
-  (let [all-keys (concat (keys p) (keys a) (keys b))]
-    (reduce (fn [r k] (assoc r k (merge-values (p k) (a k) (b k)))) {} all-keys)))
+  (let [all-keys (concat (keys p) (keys a) (keys b))] ; WTF, all should be unique, right? use set/union maybe?
+    (reduce (fn [r k]
+              (assoc r k (merge-values (p k) (a k) (b k))))
+            {}
+            all-keys)))
 
 (defn merge-commits
   [index id1 id2]
@@ -108,9 +130,9 @@
         sn2 (get-in index [id2 0])]
     [(remove-nil-values (three-way-merge psn sn1 sn2)) [id1 id2]]))
 
-(defn merge-branches
+(defn merge-branches 
   "Merge current branch to target."
-  [repo target]
+  [repo target] ;WTF no need for target here. it's always current branch
   (let [{i :index b :branches c :current} repo
         target-id (b target)
         current-id (b c)
@@ -121,19 +143,35 @@
      :current target
      }))
 
-(defn diff-maps
+(defn diff-maps 
   [base derived]
   (let [all-keys (concat (keys base) (keys derived))]
-    (reduce (fn [r k] (let [bv (base k) dv (derived k)]
-                        (cond (= bv dv)             r
-                              (every? map? [bv dv]) (assoc r k nil)
-                              :else                 (assoc r k dv)))) {} all-keys)))
+    (reduce (fn [r k]
+              (let [bv (base k)
+                    dv (derived k)]
+                (cond (= bv dv)             r
+                      (every? map? [bv dv]) (assoc r k nil)   ; WTF why nil here?
+                      :else                 (assoc r k dv))))
+            {}
+            all-keys)))
+
+;; Diff should be a recursive data structure which is calculated for not only maps but vectors and sets too.
+;; It should be calculated recursively.
+
+(comment
+  (diff-maps {:a {1 2}} {:a {3 2}})
+  ; why nil? what is the sematics of such diff? it's not a diff in any sense.
+  )
 
 (defn apply-diff
   [base difference]
   (if (every? map? [base difference])
     (merge-with apply-diff base difference)
-    difference))
+    difference)) ;WTF why difference?
+
+(comment
+  (apply-diff {:a {1 2}} (diff-maps {:a {1 2}} {:a {2 3}})) ;WTF
+  )
 
 (defn get-snapshots-between
   [index up-id dn-id]
@@ -163,3 +201,9 @@
         snapshots (create-rebased-snapshots i current-id target-id)
         new-repo (assoc-in repo [:branches c] target-id)]
     (reduce commit new-repo snapshots)))
+
+;; the main problem here is the diff structure. it should be recursive, implemented for all datasctrucures. remove-nil-values is non-sense and so is assic'ing nil in case of the difference. you should go deeper. Apart from this rebase code is quite elegant. That's why I want to to fix it.
+
+;; rebase and merge should have a continuation state in case of the conflicts. user should be able to resolve them and call the continuation with the snapshot corrected.
+;; conflict snapshot state should contain special conflict-nodes which contain two conflicting values so user could be able to choose one of them by replacing conflict-node with it.
+;; However, this is not a requirement, I'm not expecting you to implement it but just to give an idea of how it might be implemented in a better way. Exceptions is not a best way to handle user-level errors. Check out continuation-based error handling in Lisps which serve well in this particular case.
