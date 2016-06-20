@@ -1,6 +1,8 @@
 (ns clj-vcs.core
   (:gen-class))
 
+(require '[clojure.set :refer [union]])
+
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
@@ -69,6 +71,7 @@
 ;; При мерже с веткой созданной из уже замерженой,
 ;; на данный момент, выбирается не самый поздний родительский коммит.
 ; as far as I can see comment is outdated? right?
+; no, example below
 (defn find-common-parent
   [index h1 h2]
   (loop [ids1 (reverse (get-ids-history index h1))
@@ -77,6 +80,22 @@
     (if (or (not= (first ids1) (first ids2)) (empty? ids1) (empty? ids2))
       prev
       (recur (rest ids1) (rest ids2) (first ids1)))))
+
+; expected 7, but 2 returned
+(comment
+  (find-common-parent {-1 [{} []]
+                       0  [{} [-1]]
+                       1  [{} [0]]
+                       2  [{} [1]]
+                       3  [{} [2]]
+                       4  [{} [3 7]]
+                       5  [{} [4]]
+                       6  [{} [2]]
+                       7  [{} [6]]
+                       8  [{} [7]]
+                       9  [{} [8]]}
+                      5 9)
+  )
 
 (comment
   (find-common-parent {-1 [{} []]
@@ -116,7 +135,7 @@
 
 (defn three-way-merge
   [p a b]
-  (let [all-keys (concat (keys p) (keys a) (keys b))] ; WTF, all should be unique, right? use set/union maybe?
+  (let [all-keys (into #{} (union (keys p) (keys a) (keys b)))]
     (reduce (fn [r k]
               (assoc r k (merge-values (p k) (a k) (b k))))
             {}
@@ -145,7 +164,7 @@
 
 (defn diff-maps 
   [base derived]
-  (let [all-keys (concat (keys base) (keys derived))]
+  (let [all-keys (into #{} (union (keys base) (keys derived)))]
     (reduce (fn [r k]
               (let [bv (base k)
                     dv (derived k)]
