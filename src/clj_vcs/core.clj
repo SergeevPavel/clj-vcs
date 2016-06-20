@@ -2,6 +2,7 @@
   (:gen-class))
 
 (require '[clojure.set :refer [union]])
+(require '[clojure.data :refer [diff]])
 
 (defn -main
   "I don't do a whole lot ... yet."
@@ -151,7 +152,7 @@
 
 (defn merge-branches 
   "Merge current branch to target."
-  [repo target] ;WTF no need for target here. it's always current branch
+  [repo target]
   (let [{i :index b :branches c :current} repo
         target-id (b target)
         current-id (b c)
@@ -162,25 +163,44 @@
      :current target
      }))
 
-(defn diff-maps 
-  [base derived]
-  (let [all-keys (into #{} (union (keys base) (keys derived)))]
-    (reduce (fn [r k]
-              (let [bv (base k)
-                    dv (derived k)]
-                (cond (= bv dv)             r
-                      (every? map? [bv dv]) (assoc r k (diff-maps bv dv))
-                      :else                 (assoc r k dv))))
-            {}
-            all-keys)))
+(defn seqzip
+  "returns a sequence of [[ value-left] [value-right]....]  padding with nulls for shorter sequences "
+  [left right]
+  (loop [list [] a left b right]
+    (if (or (seq a) (seq b))
+      (recur (conj list [(first a) (first b)] ) (rest a) (rest b))
+       list)))
 
-;; Diff should be a recursive data structure which is calculated for not only maps but vectors and sets too.
+(defn recursive-merge
+  " Merge two structures recusively , taking non-nil values from sequences and maps and merging sets" 
+  [part-state original-state]
+  (cond
+    (sequential? part-state) (map (fn [[l r]]
+                                    (recursive-merge l r))
+                                  (seqzip part-state original-state))
+    (map? part-state) (merge-with recursive-merge part-state original-state)
+    (set? part-state) (union part-state original-state)
+    (nil? part-state ) original-state
+    :else part-state))
+
+(defn diff-structures
+  [before after]
+  (let [[del add _] (diff before after)]
+    [del add]))
+
+(defn add-values
+  [base changes]
+  (recursive-merge base changes))
+
+(defn remove-values
+  [base changes]
+  (let [[result _ _] (diff base changes)]
+    result))
 
 (defn apply-diff
   [base difference]
-  (if (every? map? [base difference])
-    (merge-with apply-diff base difference)
-    difference)) ;WTF why difference?
+  (let [[del add] difference]
+    (add-values (remove-values base del) add)))
 
 (defn get-snapshots-between
   [index up-id dn-id]
@@ -191,7 +211,7 @@
 
 (defn snapshot-difference
   [snapshots]
-  (map diff-maps snapshots (rest snapshots)))
+  (map diff-structures snapshots (rest snapshots)))
 
 (defn create-rebased-snapshots
   [index from-id to-id]
@@ -199,7 +219,7 @@
         snapshots (reverse (get-snapshots-between index pid from-id))
         diffs (snapshot-difference snapshots)
         base (get-in index [to-id 0])]
-    (rest (reductions (comp remove-nil-values apply-diff) base diffs))))
+    (rest (reductions apply-diff base diffs))))
 
 (defn rebase
   "Reabase commits from current to target."

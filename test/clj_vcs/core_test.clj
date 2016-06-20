@@ -96,6 +96,7 @@
   (testing "Simple merge branches test."
     (is (= after-merge (merge-branches before "master")))))
 
+
 (deftest simple-rebase-branches-test
   (testing "Simple rebase branches test."
     (is (= after-rebase (rebase before "master")))))
