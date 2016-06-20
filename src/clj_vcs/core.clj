@@ -118,6 +118,14 @@
 
 (declare three-way-merge)
 
+(defn seqzip
+  "returns a sequence of [[ value-left] [value-right]....]  padding with nulls."
+  [& seqs]
+  (loop [l [] s seqs]
+    (if (some some? (map seq s))
+      (recur (conj l (map first s)) (map rest s))
+       l)))
+
 (defn merge-values
   [pv av bv]
   (cond
@@ -125,20 +133,20 @@
     (= av pv)                bv
     (= bv pv)                av
     (every? map? [av bv pv]) (three-way-merge pv av bv)
+    (every? sequential? [av bv pv]) (map (fn [[p a b]]
+                                           (merge-values p a b))
+                                         (seqzip pv av bv))
+    (every? set? [av bv pv]) (union av bv)
     :else (throw (Exception. "Merge conflict"))))
-
-(defn remove-nil-values ;WTF why do you need this?
-  [m]
-  (reduce (fn [r k] (cond
-                      (map? (m k))  (assoc r k (remove-nil-values (m k)))
-                      (some? (m k)) (assoc r k (m k))
-                      :else         r)) {} (keys m)))
 
 (defn three-way-merge
   [p a b]
   (let [all-keys (into #{} (union (keys p) (keys a) (keys b)))]
     (reduce (fn [r k]
-              (assoc r k (merge-values (p k) (a k) (b k))))
+              (let [v (merge-values (p k) (a k) (b k))]
+                (if (some? v)
+                  (assoc r k v)
+                  r)))
             {}
             all-keys)))
 
@@ -148,7 +156,7 @@
         psn (get-in index [pid 0])
         sn1 (get-in index [id1 0])
         sn2 (get-in index [id2 0])]
-    [(remove-nil-values (three-way-merge psn sn1 sn2)) [id1 id2]]))
+    [(three-way-merge psn sn1 sn2) [id1 id2]]))
 
 (defn merge-branches 
   "Merge current branch to target."
@@ -163,16 +171,9 @@
      :current target
      }))
 
-(defn seqzip
-  "returns a sequence of [[ value-left] [value-right]....]  padding with nulls for shorter sequences "
-  [left right]
-  (loop [list [] a left b right]
-    (if (or (seq a) (seq b))
-      (recur (conj list [(first a) (first b)] ) (rest a) (rest b))
-       list)))
-
+;; FIXME fails on {:x {1 2}} {:x [1 2]}
 (defn recursive-merge
-  " Merge two structures recusively , taking non-nil values from sequences and maps and merging sets" 
+  " Merge two structures recusively , taking non-nil values from sequences and maps and merging sets." 
   [part-state original-state]
   (cond
     (sequential? part-state) (map (fn [[l r]]
@@ -180,7 +181,7 @@
                                   (seqzip part-state original-state))
     (map? part-state) (merge-with recursive-merge part-state original-state)
     (set? part-state) (union part-state original-state)
-    (nil? part-state ) original-state
+    (nil? part-state) original-state
     :else part-state))
 
 (defn diff-structures

@@ -100,3 +100,50 @@
 (deftest simple-rebase-branches-test
   (testing "Simple rebase branches test."
     (is (= after-rebase (rebase before "master")))))
+
+(deftest diff-test
+  (testing "Diff test."
+    (let [x {:a [1 2 3]
+             :b {:foo #{4 5 6}
+                 :bar 42
+                 :baz {1 2}
+                 }
+             }
+          y {:a [2 3 4]
+             :b {:foo #{5 6 7}
+                 :baz {1 2}
+                 }
+             :c 42
+             }
+          d (diff-structures x y)]
+      (is (= y (apply-diff x d))))))
+
+(deftest three-way-merge-test
+  (testing "Three way merge test."
+    (let [p {:a [1 2]
+             :b {:foo #{4 5}
+                 :bar 42
+                 :baz {:k 10 :l 15}
+                 }
+             :d 10
+             }
+          x {:a [1 2 3]
+             :b {:foo #{5 6}
+                 :bar 42
+                 :baz {:k 11 :l 15}
+                 }
+             :d 10
+             }
+          y {:a [1 2 3 4]
+             :b {:foo #{7 8}
+                 :bar 43
+                 :baz {:k 10 :l 16}
+                 }
+             }
+          r {:a [1 2 3 4]
+             :b {:foo #{5 6 7 8}
+                 :bar 43
+                 :baz {:k 11 :l 16}
+                 }
+             }]
+      (is (= r (three-way-merge p x y))))))
