@@ -150,28 +150,18 @@
               (let [bv (base k)
                     dv (derived k)]
                 (cond (= bv dv)             r
-                      (every? map? [bv dv]) (assoc r k nil)   ; WTF why nil here?
+                      (every? map? [bv dv]) (assoc r k (diff-maps bv dv))
                       :else                 (assoc r k dv))))
             {}
             all-keys)))
 
 ;; Diff should be a recursive data structure which is calculated for not only maps but vectors and sets too.
-;; It should be calculated recursively.
-
-(comment
-  (diff-maps {:a {1 2}} {:a {3 2}})
-  ; why nil? what is the sematics of such diff? it's not a diff in any sense.
-  )
 
 (defn apply-diff
   [base difference]
   (if (every? map? [base difference])
     (merge-with apply-diff base difference)
     difference)) ;WTF why difference?
-
-(comment
-  (apply-diff {:a {1 2}} (diff-maps {:a {1 2}} {:a {2 3}})) ;WTF
-  )
 
 (defn get-snapshots-between
   [index up-id dn-id]
