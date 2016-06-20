@@ -171,18 +171,18 @@
      :current target
      }))
 
-;; FIXME fails on {:x {1 2}} {:x [1 2]}
 (defn recursive-merge
   " Merge two structures recusively , taking non-nil values from sequences and maps and merging sets." 
-  [part-state original-state]
+  [base changes]
   (cond
-    (sequential? part-state) (map (fn [[l r]]
-                                    (recursive-merge l r))
-                                  (seqzip part-state original-state))
-    (map? part-state) (merge-with recursive-merge part-state original-state)
-    (set? part-state) (union part-state original-state)
-    (nil? part-state) original-state
-    :else part-state))
+    (every? sequential? [base changes]) (map (fn [[l r]]
+                                               (recursive-merge l r))
+                                             (seqzip base changes))
+    (every? map? [base changes]) (merge-with recursive-merge base changes)
+    (every? set? [base changes]) (union base changes)
+    (nil? base) changes
+    (nil? changes) base
+    :else (throw (Exception. "Rebase conflict"))))
 
 (defn diff-structures
   [before after]

@@ -147,3 +147,34 @@
                  }
              }]
       (is (= r (three-way-merge p x y))))))
+
+(deftest apply-diff-test
+  (testing "Application diff."
+    (let [b {:a [1 2]
+             :b {:foo #{4 5}
+                 :bar 42
+                 :baz {:k 10 :l 15}
+                 }
+             :d 10
+             }
+          d [{:b {:foo #{4}
+                  :bar 42
+                  :baz {:k 10}
+                  }
+              :d 10
+              }
+             {:a [nil nil 3 4]
+              :b {:foo #{6 7 8}
+                  :bar 43
+                  :baz {:m 20}
+                  }
+              }]
+          r {:a [1 2 3 4]
+              :b {:foo #{5 6 7 8}
+                  :bar 43
+                  :baz {:l 15 :m 20}
+                  }
+             }
+          ]
+      (is (= r (apply-diff b d))))))
+
